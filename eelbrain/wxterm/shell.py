@@ -540,6 +540,14 @@ class ShellFrame(wx.py.shell.ShellFrame):
 
         tb.Realize()
 
+    # --- Toolbar Icon ---
+        if sys.platform == 'darwin':
+            self.tbicon = EelbrainTaskBarIcon(self)
+        else:
+            self.tbicon = Icon('eelbrain', asicon=True)
+            self.SetIcon(self.tbicon)
+
+        self.Bind(wx.EVT_CLOSE, self.OnDestroyIcon)
 
     # --- Finalize ---
 
@@ -559,12 +567,6 @@ class ShellFrame(wx.py.shell.ShellFrame):
         # my shell customization
         self.ApplyStyle()
         self.Resize(ID.SIZE_MAX)
-        # icon
-        if sys.platform != 'darwin':
-            self.eelbrain_icon = Icon('eelbrain', asicon=True)
-            self.SetIcon(self.eelbrain_icon)
-            self.Bind(wx.EVT_CLOSE, self.OnDestroyIcon)
-
 
         # add help text from wx.py.shell
         text = wx.py.shell.HELP_TEXT
@@ -1021,7 +1023,7 @@ class ShellFrame(wx.py.shell.ShellFrame):
 
     def OnDestroyIcon(self, evt):
         logging.debug("DESTROY ICON CALLED")
-        self.eelbrain_icon.Destroy()
+        self.tbicon.Destroy()
         evt.Skip()
 
     def OnExecFile(self, event=None):
@@ -1515,3 +1517,43 @@ class ShellFrame(wx.py.shell.ShellFrame):
             logging.debug("external shell_msg: %r" % message)
             print message
 
+
+
+class EelbrainTaskBarIcon(wx.TaskBarIcon):
+    # Based on http://wiki.wxpython.org/Custom%20Mac%20OsX%20Dock%20Bar%20Icon
+    def __init__(self, frame):
+        wx.TaskBarIcon.__init__(self)
+        self.frame = frame
+
+        # Set the image
+        bitmap = Icon('eelbrain')
+        icon = wx.IconFromBitmap(bitmap)
+        self.SetIcon(icon, "Eelbrain")
+        self.imgidx = 1
+
+        # bind some events
+        self.Bind(wx.EVT_TASKBAR_LEFT_DCLICK, self.OnTaskBarActivate)
+        self.Bind(wx.EVT_MENU, self.OnTaskBarActivate, id=ID.TBMENU_RESTORE)
+        self.Bind(wx.EVT_MENU, self.OnTaskBarClose, id=ID.TBMENU_CLOSE)
+
+    def CreatePopupMenu(self):
+        """
+        This method is called by the base class when it needs to popup
+        the menu for the default EVT_RIGHT_DOWN event.  Just create
+        the menu how you want it and return it from this function,
+        the base class takes care of the rest.
+        """
+        menu = wx.Menu()
+        menu.Append(ID.TBMENU_RESTORE, "Restore Eelbrain")
+        menu.Append(ID.TBMENU_CLOSE, "Close Eelbrain")
+        return menu
+
+    def OnTaskBarActivate(self, evt):
+        if self.frame.IsIconized():
+            self.frame.Iconize(False)
+        if not self.frame.IsShown():
+            self.frame.Show(True)
+        self.frame.Raise()
+
+    def OnTaskBarClose(self, evt):
+        wx.CallAfter(self.frame.Close)

@@ -73,3 +73,7 @@ TABLE_COL = wx.NewId()
 TABLE_ROW = wx.NewId()
 TABLE_SAVE = wx.NewId()
 
+TBMENU_RESTORE = wx.NewId()
+TBMENU_CLOSE = wx.NewId()
+TBMENU_CHANGE = wx.NewId()
+TBMENU_REMOVE = wx.NewId()
