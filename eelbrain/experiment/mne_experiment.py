@@ -320,6 +320,8 @@ class MneExperiment(FileTree):
         self.exclude = self.exclude.copy()
         self._mri_subjects = keydefaultdict(lambda k: k)
         self._label_cache = PickleCache()
+        self._cached_label_sign_flip = {}
+        self._cached_src = {}
         self._templates = self._templates.copy()
         for cls in reversed(inspect.getmro(self.__class__)):
             if hasattr(cls, '_values'):
@@ -617,7 +619,7 @@ class MneExperiment(FileTree):
                 ndvar = load.fiff.stc_ndvar(stcm, common_brain, src, mri_sdir)
                 ds[key % 'srcm'] = ndvar
 
-    def add_stc_label(self, ds, label, src='stc'):
+    def add_stc_label(self, ds, label, stc='stc'):
         """
         Extract the label time course from a list of SourceEstimates.
 
@@ -630,9 +632,19 @@ class MneExperiment(FileTree):
             variabls.
         label :
             the label's name (e.g., 'fusiform_lh').
-        src : str
+        stc : str
             Name of the variable in ds containing the SourceEstimates.
         """
+        inv = self.get('inv')
+        if inv.startswith('free'):
+            do_sign_flip = False
+        elif inv.startswith('fixed'):
+            do_sign_flip = True
+            parc = self.get('parc')
+            src = self.get('src')
+        else:
+            raise NotImplementedError
+
         x = []
         for case in ds.itercases():
             # find appropriate label
@@ -640,12 +652,15 @@ class MneExperiment(FileTree):
             label_ = self.load_label(label, subject=subject)
 
             # extract label
-            stc = case[src]
-            label_data = stc.in_label(label_).data
+            stc_ = case[stc]
+            label_data = stc_.in_label(label_).data
+            if do_sign_flip:
+                flip = self._get_label_sign_flip(label_, parc, src)
+                label_data = flip * label_data
             label_avg = label_data.mean(0)
             x.append(label_avg)
 
-        time = UTS(stc.tmin, stc.tstep, stc.shape[1])
+        time = UTS(stc_.tmin, stc_.tstep, stc_.shape[1])
         ds[label] = NDVar(np.array(x), dims=('case', time))
 
     def cache_events(self, redo=False):
@@ -692,6 +707,31 @@ class MneExperiment(FileTree):
                 values = [v for v in values if not v in exclude]
 
         return values
+
+    def _get_label_sign_flip(self, label, parc, src):
+        """
+        Parameters
+        ----------
+
+        """
+        key = (label.subject, parc, label.name, src)
+        if key in self._cached_label_sign_flip:
+            sign = self._cached_label_sign_flip[key]
+        else:
+            src_ = self._get_src(label.subject, src)
+            sign = mne.label_sign_flip(label, src_)
+            sign = sign[:, np.newaxis]
+            self._cached_label_sign_flip[key] = sign
+        return sign
+
+    def _get_src(self, mrisubject, src):
+        key = (mrisubject, src)
+        if key in self._cached_src:
+            src_ = self._cached_src[key]
+        else:
+            fpath = self.get('src-file', mrisubject=mrisubject, src=src)
+            src_ = mne.read_source_spaces(fpath)
+        return src_
 
     def iter(self, fields='subject', group=None, **kwargs):
         """
