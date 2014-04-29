@@ -55,11 +55,25 @@ class ChangeAction():
             doc.set_path(self.old_path)
 
 
+def BadChannelAction():
+    def __init__(self, desc, old, new):
+        self.desc = desc
+        self.old = old
+        self.new = new
+
+    def do(self, doc):
+        doc.set_bad_channels(self.new)
+
+    def undo(self, doc):
+        doc.set_bad_channels(self.old)
+
+
 class Document(object):
     "Represents data for the current state of the Document"
 
     def __init__(self, ds, data='meg', accept='accept', blink='blink',
-                 tag='rej_tag', trigger='trigger', path=None, bad_chs=None):
+                 tag='rej_tag', trigger='trigger', path=None, bad_chs=None,
+                 bad_chs_path=None):
         """
         Parameters
         ----------
@@ -68,6 +82,12 @@ class Document(object):
             ...
         path : None | str
             Default location of the epoch selection file (used for save
+            command). If the file exists, it is loaded as initial state.
+        bad_chs : None | list
+            Initial bad channels values (list of channel names, takes
+            precedence over bad channels loaded from bad_chs_path).
+        bad_chs_path : None | str
+            Default location of the bad channels file (used for save
             command). If the file exists, it is loaded as initial state.
         """
         if isinstance(ds, mne.Epochs):
@@ -133,17 +153,20 @@ class Document(object):
         self.trigger = trigger
         self.blink = blink
 
+        # bad channels
         self._good_chs = slice(None)
         self._bad_chs = []
+        self.bad_chs_path = bad_chs_path
+        if bad_chs is not None:
+            self._set_bad_chs(bad_chs, reset=True)
+        elif bad_chs_path is not None:
+            self.read_bad_chs(bad_chs_path)
 
         # publisher
         self._case_change_subscriptions = []
         self._path_change_subscriptions = []
 
         # finalize
-        if bad_chs is not None:
-            self._set_bad_chs(bad_chs, reset=True)
-
         self.saved = True  # managed by the history
         self.path = path
         if path and os.path.exists(path):
