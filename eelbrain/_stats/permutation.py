@@ -37,7 +37,8 @@ def _resample_params(N, samples):
     return n_samples, samples
 
 
-def permute_order(n, samples=10000, replacement=False, unit=None, seed=0):
+def permute_order(n, samples=10000, replacement=False, unit=None, seed=0,
+                  permute_model=True):
     """Generator function to create indices to shuffle n items
 
     Parameters
@@ -63,6 +64,14 @@ def permute_order(n, samples=10000, replacement=False, unit=None, seed=0):
     -------
     Iterator over index.
     """
+    if permute_model:
+        arange = np.arange(n)
+        out = np.empty_like(arange)
+        for idx in permute_order(n, samples, replacement, unit, seed, False):
+            out[idx] = arange
+            yield out
+        return
+
     n = int(n)
     samples = int(samples)
     if samples < 0:
