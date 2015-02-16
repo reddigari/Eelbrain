@@ -1,0 +1,25 @@
+language: python
+
+env:
+    - PYTHON=2.7
+
+# Setup anaconda
+before_install:
+  - wget -q http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+  - chmod +x miniconda.sh
+  - ./miniconda.sh -b &> /dev/null;
+  - export PATH=/home/travis/miniconda/bin:$PATH
+  - conda update --yes --quiet conda &> /dev/null;
+  # We need to create a (fake) display on Travis (allows Mayavi tests to run)
+  - export DISPLAY=:99.0
+  - /sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_99.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :99 -screen 0 1400x900x24 -ac +extension GLX +render -noreset
+
+install:
+    - conda create -n testenv --yes pip python=$PYTHON &> /dev/null
+    - source activate testenv &> /dev/null
+    - conda install --yes --quiet numpy scipy matplotlib ipython wxpython mayavi nose> /dev/null
+    - python setup.py build > /dev/null
+    - python setup.py install > /dev/null
+    - pip install pysurfer
+
+script: make test
