@@ -4,6 +4,18 @@ Changes
 .. currentmodule:: eelbrain
 
 
+New in 0.15
+-----------
+
+* Under OS X 10.8 and newer Eelbrain now automatically prevents the computer
+  from going to sleep while permutation cluster tests are run.
+* Datasets can be saved as tables in RTF format (:meth:`Dataset.save_rtf`).
+* API :class:`plot.Timeplot`: the default spread indicator changed to SEM, and
+  there is a new argument for `timelabels`.
+* API: :func:`test.anova` is now a function with a slightly changed signature.
+* API: :func:`test.oneway` was removed. Use :func:`test.anova`.
+
+
 New in 0.14
 -----------
 
