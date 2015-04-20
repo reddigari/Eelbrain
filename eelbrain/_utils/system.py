@@ -1,12 +1,14 @@
 # Author: Christian Brodbeck <christianbrodbeck@nyu.edu>
 from distutils.version import LooseVersion
-from subprocess import Popen
 import platform
+from subprocess import Popen
+from warnings import warn
 
 
 class Caffeinator(object):
     """Keep track of processes blocking idle sleep"""
-
+    #  ~ 7.5 ms on my old MacBook Pro
+    #  >>> timeit with caffeine: 1+2
     def __init__(self):
         self._popen = None
         self.n_processes = 0
@@ -15,6 +17,11 @@ class Caffeinator(object):
             if x_version >= LooseVersion('10.8'):
                 self.enabled = True
                 return
+            else:
+                warn("Since you are using an outdated version of OS X, your "
+                     "computer might go to sleep while performing permutation "
+                     "tests. Update to at least OS X 10.8, or make sure to "
+                     "turn off the computer's automatic sleep mode.")
         self.enabled = False
 
     def __enter__(self):
