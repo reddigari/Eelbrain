@@ -36,6 +36,7 @@ from .._data_obj import (align, UTS, DimensionMismatchError,
 from ..fmtxt import List, Report
 from .._report import named_list
 from .._resources import predefined_connectivity
+from .._stats import spm
 from .._utils import subp, ui, keydefaultdict
 from .._utils.mne_utils import fix_annot_names, is_fake_mri
 from ._experiment import FileTree
@@ -648,6 +649,8 @@ class MneExperiment(FileTree):
                 elif kind == 't_contrast_rel':
                     params = {'kind': kind, 'model': model,
                               'contrast': test_parameter}
+                elif kind == 'two stage':
+                    pass
                 else:
                     raise ValueError("Unknown test: %s" % repr(kind))
             elif not isinstance(params, dict):
@@ -2181,9 +2184,12 @@ class MneExperiment(FileTree):
             test = self.get('test', **kwargs)
         else:
             self.set(test=test, **kwargs)
+        test_params = self._tests[test]
 
-        if self._tests[test]['kind'] == 'custom':
+        if test_params['kind'] == 'custom':
             raise RuntimeError("Don't know how to perform 'custom' test")
+        elif test_params['kind'] == 'two stage':
+            raise NotImplementedError("Loading two-stage test")
 
         # find data to use
         modality = self.get('modality')
@@ -2254,7 +2260,6 @@ class MneExperiment(FileTree):
         # load data
         if load_data:
             # determine categories to load
-            test_params = self._tests[test]
             if test_params['kind'] == 'ttest_rel':
                 cat = (test_params['c1'], test_params['c0'])
             else:
@@ -3263,15 +3268,31 @@ class MneExperiment(FileTree):
         if not redo and not redo_test and os.path.exists(dst):
             return
 
+        # start report
+        title = self.format('{experiment} {epoch} {test} {test_options}')
+        report = Report(title)
+
+        params = self._tests[test]
+        if params['kind'] == 'two stage':
+            self._two_stage_report(report, 'src', sns_baseline, src_baseline,
+                                   test, pmin, samples, tstart, tstop, parc, mask,
+                                   include, redo_test)
+        else:
+            self._evoked_report(report, test, sns_baseline, src_baseline, pmin,
+                                samples, tstart, tstop, parc, mask, include,
+                                redo_test)
+
+        # report signature
+        report.sign(('eelbrain', 'mne', 'surfer', 'scipy', 'numpy'))
+        report.save_html(dst)
+
+    def _evoked_report(self, report, test, sns_baseline, src_baseline, pmin,
+                       samples, tstart, tstop, parc, mask, include, redo_test):
         # load data
         ds, res = self.load_test(None, tstart, tstop, pmin, parc, mask, samples,
                                  'src', sns_baseline, src_baseline, True, True,
                                  redo_test)
         y = ds['srcm']
-
-        # start report
-        title = self.format('{experiment} {epoch} {test} {test_options}')
-        report = Report(title)
 
         # info
         self._report_test_info(report.add_section("Test Info"), ds, test, res,
@@ -3351,10 +3372,28 @@ class MneExperiment(FileTree):
                 _report.source_time_clusters(section, clusters, src_, ds, model,
                                              include, title, colors)
 
-        # report signature
-        report.sign(('eelbrain', 'mne', 'surfer', 'scipy', 'numpy'))
+    def _two_stage_report(self, report, test, sns_baseline, src_baseline, pmin,
+                          samples, tstart, tstop, parc, mask, include,
+                          redo_test):
+        test_params = self._tests[test]
+        model = test_params['stage 1']
+        if test_params['method'] != 'nih':
+            raise NotImplementedError("method=%s" % repr(test_params['method']))
+        test_kwargs = self._test_kwargs(samples, pmin, tstart, tstop,
+                                        ('time', 'source'), None)
 
-        report.save_html(dst)
+        logger.info("Starting two-stage report")
+        lms = []
+        for subject in self:
+            ds = self.load_epochs_stc(subject, sns_baseline, src_baseline,
+                                      morph=True, mask=mask)
+                # ds = self.load_epochs(subject, sns_baseline)
+            lms.append(spm.LM('srcm', model, ds, subject=subject))
+            logger.info("Created stage 1 model for %s" % subject)
+        rlm = spm.RandomLM(lms)
+        for term in rlm.column_names:
+            res = rlm.column_ttest_report(term, **test_kwargs)
+            report.append()
 
     def make_report_rois(self, test, parc=None, pmin=None, tstart=0.15, tstop=None,
                          samples=10000, sns_baseline=True, src_baseline=None,
