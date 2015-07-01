@@ -67,7 +67,7 @@ class LM(object):
         return self._flat_coefficient(term).reshape((-1,) + self._shape)
 
     def _n_columns(self):
-        return {term: s.stop - s.start for term, s in self._p.terms.iteritems}
+        return {term: s.stop - s.start for term, s in self._p.terms.iteritems()}
 
 
 class RandomLM(object):
@@ -87,7 +87,7 @@ class RandomLM(object):
             if lm._n_columns() != self._n_columns:
                 raise ValueError("Model for %s and %s don't match"
                                  % (lm0.subject, lm.subject))
-        self.column_names = lm0.column_names
+        self.column_names = lm0._p.column_names
 
         # unique subject labels
         name_i = 0
