@@ -4,18 +4,133 @@ Plot topographic maps of sensor space data.
 # Author: Christian Brodbeck <christianbrodbeck@nyu.edu>
 from __future__ import division
 
-from itertools import izip
+from itertools import izip, repeat
 from math import floor, sqrt
 
+from mne.viz import plot_topomap
 import numpy as np
 from scipy import interpolate
 
+from .._data_obj import SEQUENCE_TYPES
 from . import _base
 from ._base import _EelFigure
 from . import _utsnd as _utsnd
 from ._sensors import SensorMapMixin
 from ._sensors import _plt_map2d
 
+
+class MNETopomap(_EelFigure):
+    """Plot topomaps with MNE interpolation method
+
+    Parameters
+    ----------
+    y : NDVar | list of NDVar, dims = ([case,] sensor,)
+        Data to plot.
+    xax : None | categorial
+        Create a separate plot for each cell in this model.
+    ds : None | Dataset
+        If a Dataset is provided, ``y`` and ``xax`` can be specified as strings.
+    proj : str | list of str
+        The sensor projection to use for topomaps, either the same projection
+        for all maps (str) or a different projection for ach plot (list of str).
+        Valid values are: 'left', 'right', 'front', 'back', 'top', 'bottom',
+        'z root' (default.
+    vmax, vmin : None | scalar
+        Override the default plot limits. If only vmax is specified, vmin
+        is set to -vmax.
+    contours : int | sequence of scalar
+        Contours to draw on top of the colormap. Either the number of contours,
+        or a sequence of values at which to draw contours.
+    cmap : str
+        Colormap, default depends on data.
+    res : int
+        Resolution of the topomaps (width = height = ``res``).
+    title : None | string
+        Figure title.
+    h : scalar
+        Height of the figure.
+    w : scalar
+        Width of the figure.
+    axh : scalar
+        Height of the axes.
+    axw : scalar
+        Width of the axes.
+    nrow : int
+        Set a limit to the number of rows (default is no limit).
+    ncol : int
+        Set a limit to the number of columns (defaut is no limit). If
+        neither nrow or ncol is specified, a square layout is preferred.
+    dpi : int
+        DPI for the figure (default is to use matplotlib rc parameters).
+    show : bool
+        Show the figure in the GUI (default True). Use False for creating
+        figures and saving them without displaying them on the screen.
+    run : bool
+        Run the Eelbrain GUI app (default is True for interactive plotting and
+        False in scripts).
+
+
+    Notes
+    -----
+    Head outlines are only implemented for top projections. For other
+    projections, a rectangular image will be drawn unmasked.
+    """
+    _make_axes = False
+
+    def __init__(self, y, xax=None, ds=None, proj='default', vmax=None,
+                 vmin=None, contours=6, cmap=None, res=64, title=None, *args,
+                 **kwargs):
+        y, _ = self._epochs = _base.unpack_epochs_arg(y, ('sensor',), xax, ds)
+        nax = len(y)
+        vlims = _base.find_fig_vlims(y, True, vmax, vmin)
+        if isinstance(proj, basestring):
+            proj = repeat(proj, nax)
+        elif not isinstance(proj, SEQUENCE_TYPES):
+            raise TypeError("proj=%s" % repr(proj))
+        elif len(proj) != nax:
+            raise ValueError("need as many proj as axes (%s)" % nax)
+
+        _EelFigure.__init__(self, "MNETopomap", nax, 5, 1, False, title, False,
+                            False, *args, **kwargs)
+
+        # make axes
+        frame = 0.05
+        xframe = frame / self._layout.ncol
+        yframe = frame / self._layout.nrow
+        axw = (1. / self._layout.ncol)
+        axh = (1. / self._layout.nrow)
+        x_extent = axw * (1. - 2 * frame)
+        y_extent = axh * (1. - 2 * frame)
+        for row in xrange(self._layout.nrow - 1, -1, -1):
+            y_ = row * axh + yframe
+            for col in xrange(self._layout.ncol):
+                x = col * axw + xframe
+                ax = self.figure.add_axes((x, y_, x_extent, y_extent))
+                self._axes.append(ax)
+
+        # plots
+        self._ims = []
+        self._cts = []
+        for ax, layers, proj_ in izip(self._axes, y, proj):
+            if len(layers) > 1:
+                raise NotImplementedError
+            ndvar = layers[0]
+            locs = ndvar.sensor.get_locs_2d(proj_, frame=0.1)
+            data = ndvar.get_data(('sensor',))
+            outlines = ndvar.sensor._outlines_arg(proj_)
+            index = ndvar.sensor._visible_sensors(proj_)
+            if index is not None:
+                data = data[index]
+                locs = locs[index]
+            im_kwa = _base.find_im_args(ndvar, False, vlims)
+            if cmap is not None:
+                im_kwa['cmap'] = cmap
+            im, ct = plot_topomap(data, locs, axis=ax, show=False, res=res,
+                                  outlines=outlines, contours=contours, **im_kwa)
+            self._ims.append(im)
+            self._cts.append(ct)
+
+        self._show()
 
 
 class Topomap(SensorMapMixin, _EelFigure):

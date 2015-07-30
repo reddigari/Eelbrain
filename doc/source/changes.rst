@@ -15,6 +15,8 @@ New in 0.18
 * The objects returned by :mod:`plot.brain` plotting functions now contain
   a :meth:`~plot._brain_mixin.BrainMixin.plot_colorbar` method to create a
   corresponding :class:`plot.ColorBar` plot.
+* New :func:`plot.MNETopomap` to plot well interpolated sensor topographies with
+  mne-python.
 * New function :func:`choose` to combine data in different :class:`NDVars`
   on a case by case basis.
 * Rejection-GUI (:func:`gui.select_epochs`): Press Shift-i when hovering over
